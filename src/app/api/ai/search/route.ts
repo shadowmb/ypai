@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-// AI query analysis helper
+// Helper function to clean Cyrillic characters for JSON
+function sanitizeForJson(obj: any): any {
+  if (typeof obj === 'string') {
+    return obj.replace(/[^\x00-\x7F]/g, '?') // Replace non-ASCII with ?
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeForJson)
+  }
+  if (obj && typeof obj === 'object') {
+    const cleaned: any = {}
+    for (const [key, value] of Object.entries(obj)) {
+      cleaned[key] = sanitizeForJson(value)
+    }
+    return cleaned
+  }
+  return obj
+}
 function analyzeQuery(query: string) {
   const locations = ['софия', 'пловдив', 'варна', 'бургас', 'стара загора', 'плевен', 'русе', 'габрово', 'велико търново', 'благоевград']
   const categories = {
@@ -203,12 +219,16 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    return NextResponse.json(response, {
+    // Clean the response for JSON serialization
+    const responseString = JSON.stringify(response)
+    const cleanResponse = JSON.parse(responseString) // This ensures proper UTF-8 encoding
+    
+    return new Response(JSON.stringify(cleanResponse, null, 2), {
+      status: 200,
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
-        'X-AI-Enhanced': 'true',
-        'X-Query-Analysis': Buffer.from(JSON.stringify(analysis), 'utf8').toString('base64')
+        'X-AI-Enhanced': 'true'
       }
     })
     
