@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { supabase, Business, Category } from '@/lib/supabase'
 import BusinessCard from '@/components/BusinessCard'
+import StructuredData from '@/components/StructuredData' 
+
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('human')

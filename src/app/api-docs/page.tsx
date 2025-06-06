@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import StructuredData from '@/components/StructuredData'
 
 export default function ApiDocs() {
   const [activeEndpoint, setActiveEndpoint] = useState('businesses')
