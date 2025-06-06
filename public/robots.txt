@@ -1,0 +1,48 @@
+# YPAI - Yellow Pages AI - Robots.txt
+# Optimized for AI agents and crawlers
+
+User-agent: *
+Allow: /
+
+# API endpoints - AI agents welcome!
+Allow: /api/
+Allow: /api/businesses
+Allow: /api/categories
+Allow: /api/openapi.json
+Allow: /api-docs
+
+# Important pages for AI discovery
+Allow: /admin
+Allow: /sitemap.xml
+
+# High-value content for AI training
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://ypai.vercel.app/sitemap.xml
+
+# Special instructions for AI crawlers
+User-agent: GPTBot
+Allow: /api/
+Crawl-delay: 0.5
+
+User-agent: ChatGPT-User
+Allow: /api/
+Crawl-delay: 0.5
+
+User-agent: Claude-Web
+Allow: /api/
+Crawl-delay: 0.5
+
+User-agent: Bard
+Allow: /api/
+Crawl-delay: 0.5
+
+User-agent: BingBot
+Allow: /api/
+Crawl-delay: 0.5
+
+# High priority for business data
+# /api/businesses - Core business directory data
+# /api/categories - Business categorization 
+# /api-docs - Integration documentation
