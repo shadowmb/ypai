@@ -254,14 +254,14 @@ export default function ApiDocs() {
                 </div>
               )}
 
-              {method.body && (
+                {('body' in method) && method.body && (
                 <div className="mb-6">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Request Body</h4>
-                  <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Request Body</h4>
+                    <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm">
                     <pre>{JSON.stringify(method.body, null, 2)}</pre>
-                  </div>
+                    </div>
                 </div>
-              )}
+                )}
 
               {method.example && (
                 <div className="mb-6">
