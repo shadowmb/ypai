@@ -269,6 +269,13 @@ export default function AdminPanel() {
             </button>
 
             <Link
+              href="/admin/add-wizard"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
+            >
+              🧙‍♂️ Smart Wizard
+            </Link>
+
+            <Link
               href="/admin/import"
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
             >
@@ -278,12 +285,12 @@ export default function AdminPanel() {
             <Link
               href="/api-docs"
               target="_blank"
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
             >
               📚 API Docs
             </Link>
           </div>
-        </div>
+        </div> 
 
         {/* Add/Edit Business Form */}
         {(showAddForm || editingBusiness) && (
