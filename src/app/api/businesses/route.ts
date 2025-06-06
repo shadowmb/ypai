@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       .order('rating', { ascending: false })
       .range(offset, offset + limit - 1)
 
-    const { data: businesses, error, count } = await query
+    const { data: businesses, error } = await query
 
     if (error) {
       console.error('Database error:', error)

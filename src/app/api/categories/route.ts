@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const includeCount = searchParams.get('include_count') === 'true'
 
-    let query = supabase
+    const query = supabase
       .from('categories')
       .select('*')
       .order('name')

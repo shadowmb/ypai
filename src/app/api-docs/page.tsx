@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 export default function ApiDocs() {
   const [activeEndpoint, setActiveEndpoint] = useState('businesses')
@@ -139,18 +140,18 @@ export default function ApiDocs() {
               </p>
             </div>
             <div className="flex gap-4">
-              <a
+              <Link
                 href="/"
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg transition-colors"
               >
                 ← Главна страница
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/admin"
                 className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition-colors"
               >
                 🛠️ Админ панел
-              </a>
+              </Link>
             </div>
           </div>
         </div>

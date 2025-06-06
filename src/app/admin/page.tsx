@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase, Business, Category } from '@/lib/supabase'
+import Link from 'next/link'
 
 export default function AdminPanel() {
   const [businesses, setBusinesses] = useState<Business[]>([])
@@ -82,7 +83,7 @@ export default function AdminPanel() {
     e.preventDefault()
     setLoading(true)
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('businesses')
       .insert([{
         ...newBusiness,
@@ -208,12 +209,12 @@ export default function AdminPanel() {
               <h1 className="text-3xl font-bold text-gray-900">🛠️ YPAI Admin Panel</h1>
               <p className="text-gray-600 mt-2">Управление на бизнеси и категории</p>
             </div>
-            <a
-              href="/"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg transition-colors"
-            >
-              ← Към сайта
-            </a>
+            <Link
+                href="/"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg transition-colors"
+                >
+                ← Към сайта
+            </Link>
           </div>
         </div>
 
