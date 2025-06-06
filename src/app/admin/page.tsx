@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase, Business, Category } from '@/lib/supabase'
 import Link from 'next/link'
 
+
 export default function AdminPanel() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -257,14 +258,32 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        {/* Add Business Button */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors"
-          >
-            {showAddForm ? '✕ Затвори' : '+ Добави нов бизнес'}
-          </button>
+       {/* Action Buttons */}
+       <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <div className="flex flex-wrap gap-4">
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
+            >
+              {showAddForm ? '✕ Затвори' : '+ Добави нов бизнес'}
+            </button>
+
+            <Link
+              href="/admin/import"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
+            >
+              📊 Bulk Import
+            </Link>
+
+            <Link
+              href="/api-docs"
+              target="_blank"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
+            >
+              📚 API Docs
+            </Link>
+          </div>
+        </div>
 
         {/* Add/Edit Business Form */}
         {(showAddForm || editingBusiness) && (
