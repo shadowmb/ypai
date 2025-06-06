@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
     const analysis = analyzeQuery(query)
     if (intent) analysis.intent = intent
     
-    // Build Supabase query
+    // Build Supabase query - simplified version
     let supabaseQuery = supabase
       .from('businesses')
       .select(`
@@ -162,15 +162,10 @@ export async function GET(request: NextRequest) {
         )
       `)
     
-    // Apply filters based on analysis
-    if (analysis.category_slug) {
-      supabaseQuery = supabaseQuery.eq('categories.slug', analysis.category_slug)
-    }
-    
-    // Text search across name and description
+    // Simple text search if keywords exist
     if (analysis.keywords.length > 0) {
-      const searchTerms = analysis.keywords.join(' | ')
-      supabaseQuery = supabaseQuery.textSearch('name', searchTerms)
+      const firstKeyword = analysis.keywords[0]
+      supabaseQuery = supabaseQuery.ilike('name', `%${firstKeyword}%`)
     }
     
     const { data: businesses, error } = await supabaseQuery.limit(limit * 2) // Get more for better filtering
@@ -210,10 +205,10 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(response, {
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
         'X-AI-Enhanced': 'true',
-        'X-Query-Analysis': JSON.stringify(analysis)
+        'X-Query-Analysis': Buffer.from(JSON.stringify(analysis), 'utf8').toString('base64')
       }
     })
     
