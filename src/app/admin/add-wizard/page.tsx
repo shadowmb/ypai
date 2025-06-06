@@ -4,24 +4,200 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
-// Category templates (embedded for now)
-interface FieldDefinition {
-  name: string
-  label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'multi-select' | 'file' | 'json' | 'boolean' | 'time' | 'url'
-  required: boolean
-  placeholder?: string
-  options?: string[]
-  description?: string
+// Note: These components would need to be imported from separate files
+// For now, they're defined inline for the complete wizard
+
+// Simplified validation components for the demo
+interface FieldValidation {
+  isValid: boolean
+  message?: string
+  isRequired: boolean
 }
 
-interface CategoryTemplate {
-  categoryName: string
-  icon: string
-  fields: FieldDefinition[]
+const ValidationError = ({ validation }: { validation?: FieldValidation }) => {
+  if (!validation || validation.isValid) return null
+  return (
+    <div className="text-red-600 text-sm mt-1 flex items-center">
+      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+      </svg>
+      {validation.message}
+    </div>
+  )
 }
 
-const categoryTemplates: { [key: string]: CategoryTemplate } = {
+const RequiredIndicator = ({ isRequired }: { isRequired?: boolean }) => {
+  if (!isRequired) return null
+  return <span className="text-red-500 ml-1">*</span>
+}
+
+// Simplified Working Hours Picker
+const WorkingHoursPicker = ({ value, onChange }: { value: any, onChange: (hours: any) => void }) => {
+  const days = ['Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота', 'Неделя']
+  
+  return (
+    <div className="bg-gray-50 p-4 rounded-lg">
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => onChange({ standard: 'Пн-Пт: 09:00-17:00, Сб-Нд: затворено' })}
+          className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm hover:bg-blue-200"
+        >
+          📅 Стандартно работно време
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange({ all_day: '24/7' })}
+          className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200"
+        >
+          🕒 24/7
+        </button>
+      </div>
+      <textarea
+        rows={3}
+        value={typeof value === 'object' ? Object.values(value)[0] : value || ''}
+        onChange={(e) => onChange({ custom: e.target.value })}
+        placeholder="Пн-Пт: 09:00-17:00&#10;Сб: 09:00-14:00&#10;Нд: затворено"
+        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+      />
+    </div>
+  )
+}
+
+// Simplified Phone Input
+const PhoneInput = ({ value, onChange }: { value: string, onChange: (phone: string) => void }) => {
+  return (
+    <div className="flex">
+      <div className="flex items-center px-3 py-2 border border-r-0 border-gray-300 rounded-l-lg bg-gray-50">
+        <span className="text-lg">🇧🇬</span>
+        <span className="ml-2 text-sm font-medium text-gray-700">+359</span>
+      </div>
+      <input
+        type="tel"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="88 123 4567"
+        className="flex-1 px-4 py-2 border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      />
+    </div>
+  )
+}
+
+// Simplified Custom Services Input
+const CustomServicesInput = ({ 
+  options, 
+  value, 
+  onChange, 
+  label 
+}: { 
+  options: string[], 
+  value: string[], 
+  onChange: (services: string[]) => void, 
+  label: string 
+}) => {
+  const [customService, setCustomService] = useState('')
+  const [isAddingCustom, setIsAddingCustom] = useState(false)
+
+  const handleToggleService = (service: string) => {
+    if (value.includes(service)) {
+      onChange(value.filter(s => s !== service))
+    } else {
+      onChange([...value, service])
+    }
+  }
+
+  const handleAddCustomService = () => {
+    if (customService.trim() && !value.includes(customService.trim())) {
+      onChange([...value, customService.trim()])
+      setCustomService('')
+      setIsAddingCustom(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      
+      {/* Selected Services */}
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-2 p-3 bg-blue-50 rounded-lg">
+          {value.map(service => (
+            <span
+              key={service}
+              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+            >
+              {service}
+              <button
+                type="button"
+                onClick={() => onChange(value.filter(s => s !== service))}
+                className="ml-2 text-red-500 hover:text-red-700"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Available Services */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {options.filter(option => !value.includes(option)).map(option => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => handleToggleService(option)}
+            className="px-3 py-2 text-left text-sm border border-gray-200 rounded hover:bg-gray-50 hover:border-blue-300"
+          >
+            + {option}
+          </button>
+        ))}
+      </div>
+
+      {/* Add Custom Service */}
+      {!isAddingCustom ? (
+        <button
+          type="button"
+          onClick={() => setIsAddingCustom(true)}
+          className="w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600"
+        >
+          ✨ Добави своя услуга
+        </button>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={customService}
+            onChange={(e) => setCustomService(e.target.value)}
+            placeholder="Нова услуга..."
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            onKeyPress={(e) => e.key === 'Enter' && handleAddCustomService()}
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={handleAddCustomService}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            ✓
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsAddingCustom(false)
+              setCustomService('')
+            }}
+            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Enhanced category templates
+const categoryTemplates: { [key: string]: any } = {
   'ресторанти': {
     categoryName: 'Ресторанти',
     icon: '🍽️',
@@ -38,26 +214,14 @@ const categoryTemplates: { [key: string]: CategoryTemplate } = {
         label: 'Ценова категория',
         type: 'select',
         required: true,
-        options: ['$', '$$', '$$$', '$$$$']
+        options: ['$ (до 20лв)', '$$ (20-40лв)', '$$$ (40-80лв)', '$$$$ (над 80лв)']
       },
       {
-        name: 'delivery',
-        label: 'Доставка',
-        type: 'boolean',
-        required: false
-      },
-      {
-        name: 'reservation',
-        label: 'Резервации',
-        type: 'boolean',
-        required: false
-      },
-      {
-        name: 'menu_url',
-        label: 'Линк към меню',
-        type: 'url',
+        name: 'services',
+        label: 'Услуги',
+        type: 'multi-select-custom',
         required: false,
-        placeholder: 'https://example.com/menu.pdf'
+        options: ['Доставка', 'Резервации', 'Събитийно обслужване', 'Външна тераса', 'Паркинг', 'Детска зона']
       },
       {
         name: 'specialties',
@@ -68,7 +232,6 @@ const categoryTemplates: { [key: string]: CategoryTemplate } = {
       }
     ]
   },
-
   'фризьорски_салони': {
     categoryName: 'Фризьорски салони',
     icon: '✂️',
@@ -76,22 +239,9 @@ const categoryTemplates: { [key: string]: CategoryTemplate } = {
       {
         name: 'services',
         label: 'Услуги',
-        type: 'multi-select',
+        type: 'multi-select-custom',
         required: true,
-        options: ['Подстригване жени', 'Подстригване мъже', 'Боядисване', 'Къдрене', 'Изправяне', 'Маски', 'Масаж']
-      },
-      {
-        name: 'price_list',
-        label: 'Ценоразпис',
-        type: 'textarea',
-        required: false,
-        placeholder: 'Подстригване жени: 25лв\nБоядисване: 45лв\nМаска: 15лв'
-      },
-      {
-        name: 'appointment_booking',
-        label: 'Записване на час',
-        type: 'boolean',
-        required: false
+        options: ['Подстригване жени', 'Подстригване мъже', 'Боядисване', 'Къдрене', 'Изправяне', 'Маски']
       },
       {
         name: 'specialists',
@@ -102,7 +252,6 @@ const categoryTemplates: { [key: string]: CategoryTemplate } = {
       }
     ]
   },
-
   'хотели': {
     categoryName: 'Хотели',
     icon: '🏨',
@@ -117,89 +266,12 @@ const categoryTemplates: { [key: string]: CategoryTemplate } = {
       {
         name: 'room_types',
         label: 'Типове стаи',
-        type: 'multi-select',
+        type: 'multi-select-custom',
         required: true,
         options: ['Единична', 'Двойна', 'Апартамент', 'Луксозна', 'Семейна']
-      },
-      {
-        name: 'amenities',
-        label: 'Удобства',
-        type: 'multi-select',
-        required: false,
-        options: ['WiFi', 'Паркинг', 'Басейн', 'Фитнес', 'SPA', 'Ресторант', 'Климатик', 'Телевизор']
-      },
-      {
-        name: 'price_range',
-        label: 'Цени за нощувка',
-        type: 'textarea',
-        required: false,
-        placeholder: 'Единична: 80лв\nДвойна: 120лв\nАпартамент: 200лв'
       }
     ]
   },
-
-  'автосервизи': {
-    categoryName: 'Автосервизи',
-    icon: '🚗',
-    fields: [
-      {
-        name: 'services',
-        label: 'Услуги',
-        type: 'multi-select',
-        required: true,
-        options: ['Смяна на масло', 'Гуми', 'Спирачки', 'Диагностика', 'Електрика', 'Климатик', 'Бояджийски работи']
-      },
-      {
-        name: 'car_brands',
-        label: 'Марки автомобили',
-        type: 'multi-select',
-        required: false,
-        options: ['BMW', 'Mercedes', 'Audi', 'VW', 'Opel', 'Ford', 'Toyota', 'Всички марки']
-      },
-      {
-        name: 'warranty',
-        label: 'Гаранция',
-        type: 'text',
-        required: false,
-        placeholder: '6 месеца на извършени услуги'
-      }
-    ]
-  },
-
-  'лекари': {
-    categoryName: 'Лекари',
-    icon: '👨‍⚕️',
-    fields: [
-      {
-        name: 'specialty',
-        label: 'Специалност',
-        type: 'select',
-        required: true,
-        options: ['Общопрактикуващ', 'Кардиолог', 'Дерматолог', 'Гинеколог', 'Педиатър', 'Стоматолог', 'Очен лекар']
-      },
-      {
-        name: 'accepted_insurance',
-        label: 'Приемани застраховки',
-        type: 'multi-select',
-        required: false,
-        options: ['НЗОК', 'ДЗИ', 'Булстрад', 'Уника', 'Euroins']
-      },
-      {
-        name: 'consultation_fee',
-        label: 'Цена на прегледа',
-        type: 'text',
-        required: false,
-        placeholder: '50лв (без НЗОК), 15лв (с НЗОК)'
-      },
-      {
-        name: 'appointment_required',
-        label: 'Необходимо записване',
-        type: 'boolean',
-        required: false
-      }
-    ]
-  },
-
   'default': {
     categoryName: 'Общ бизнес',
     icon: '🏢',
@@ -207,29 +279,25 @@ const categoryTemplates: { [key: string]: CategoryTemplate } = {
       {
         name: 'services',
         label: 'Услуги',
-        type: 'textarea',
+        type: 'multi-select-custom',
         required: false,
-        placeholder: 'Опишете вашите услуги...'
+        options: ['Консултации', 'Ремонти', 'Доставка', 'Монтаж']
       }
     ]
   }
 }
 
-function getTemplateForCategory(categorySlug: string): CategoryTemplate {
+function getTemplateForCategory(categorySlug: string) {
   return categoryTemplates[categorySlug] || categoryTemplates['default']
 }
 
-interface WizardStep {
-  title: string
-  description: string
-  component: React.ReactNode
-}
-
-export default function SmartBusinessWizard() {
+export default function EnhancedSmartWizard() {
   const [currentStep, setCurrentStep] = useState(0)
   const [selectedCategory, setSelectedCategory] = useState('')
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({})
+
   const [businessData, setBusinessData] = useState<any>({
     name: '',
     description: '',
@@ -238,7 +306,7 @@ export default function SmartBusinessWizard() {
     phone: '',
     email: '',
     website: '',
-    working_hours: '',
+    working_hours: {},
     custom_fields: {}
   })
 
@@ -251,135 +319,167 @@ export default function SmartBusinessWizard() {
     { name: 'Други', slug: 'default', icon: '🏢', id: 6 }
   ]
 
-  const renderField = (field: FieldDefinition) => {
-    const value = businessData.custom_fields[field.name] || ''
+  const updateBusinessData = (updates: any) => {
+    setBusinessData((prev: any) => ({ ...prev, ...updates }))
+  }
+
+  const updateCustomField = (fieldName: string, value: any) => {
+    setBusinessData((prev: any) => ({
+      ...prev,
+      custom_fields: {
+        ...prev.custom_fields,
+        [fieldName]: value
+      }
+    }))
+  }
+
+  const validateStep = (stepIndex: number): boolean => {
+    const errors: { [key: string]: string } = {}
     
-    const updateField = (newValue: any) => {
-      setBusinessData((prev: any) => ({
-        ...prev,
-        custom_fields: {
-          ...prev.custom_fields,
-          [field.name]: newValue
+    switch (stepIndex) {
+      case 0:
+        if (!selectedCategory) {
+          errors.category = 'Моля, изберете категория'
+          return false
         }
-      }))
+        break
+      case 1:
+        if (!businessData.name.trim()) {
+          errors.name = 'Името е задължително'
+        }
+        if (!businessData.working_hours || Object.keys(businessData.working_hours).length === 0) {
+          errors.working_hours = 'Работното време е задължително'
+        }
+        break
+      case 2:
+        const template = getTemplateForCategory(selectedCategory)
+        template.fields.forEach((field: any) => {
+          if (field.required) {
+            const value = businessData.custom_fields[field.name]
+            if (!value || (Array.isArray(value) && value.length === 0)) {
+              errors[field.name] = `${field.label} е задължително`
+            }
+          }
+        })
+        break
     }
+
+    setValidationErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const renderCustomField = (field: any) => {
+    const value = businessData.custom_fields[field.name] || ''
+    const hasError = validationErrors[field.name]
 
     switch (field.type) {
       case 'select':
         return (
-          <select
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            value={value}
-            onChange={(e) => updateField(e.target.value)}
-            required={field.required}
-          >
-            <option value="">Избери {field.label.toLowerCase()}</option>
-            {field.options?.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        )
-
-      case 'multi-select':
-        return (
-          <div className="space-y-2">
-            {field.options?.map(option => (
-              <label key={option} className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="mr-2"
-                  checked={Array.isArray(value) && value.includes(option)}
-                  onChange={(e) => {
-                    const currentArray = Array.isArray(value) ? value : []
-                    if (e.target.checked) {
-                      updateField([...currentArray, option])
-                    } else {
-                      updateField(currentArray.filter((item: string) => item !== option))
-                    }
-                  }}
-                />
-                {option}
-              </label>
-            ))}
+          <div key={field.name}>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {field.label}
+              <RequiredIndicator isRequired={field.required} />
+            </label>
+            <select
+              value={value}
+              onChange={(e) => updateCustomField(field.name, e.target.value)}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                hasError ? 'border-red-300' : 'border-gray-300'
+              }`}
+            >
+              <option value="">Избери {field.label.toLowerCase()}</option>
+              {field.options?.map((option: string) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            {hasError && <div className="text-red-600 text-sm mt-1">{hasError}</div>}
           </div>
         )
 
-      case 'boolean':
+      case 'multi-select-custom':
         return (
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              className="mr-2"
-              checked={value === true}
-              onChange={(e) => updateField(e.target.checked)}
+          <div key={field.name}>
+            <CustomServicesInput
+              options={field.options || []}
+              value={Array.isArray(value) ? value : []}
+              onChange={(services) => updateCustomField(field.name, services)}
+              label={`${field.label}${field.required ? ' *' : ''}`}
             />
-            Да
-          </label>
+            {hasError && <div className="text-red-600 text-sm mt-1">{hasError}</div>}
+          </div>
         )
 
       case 'textarea':
         return (
-          <textarea
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            rows={3}
-            value={value}
-            onChange={(e) => updateField(e.target.value)}
-            placeholder={field.placeholder}
-            required={field.required}
-          />
+          <div key={field.name}>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {field.label}
+              <RequiredIndicator isRequired={field.required} />
+            </label>
+            <textarea
+              rows={3}
+              value={value}
+              onChange={(e) => updateCustomField(field.name, e.target.value)}
+              placeholder={field.placeholder}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                hasError ? 'border-red-300' : 'border-gray-300'
+              }`}
+            />
+            {hasError && <div className="text-red-600 text-sm mt-1">{hasError}</div>}
+          </div>
         )
 
-      case 'number':
+      default:
         return (
-          <input
-            type="number"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            value={value}
-            onChange={(e) => updateField(e.target.value)}
-            placeholder={field.placeholder}
-            required={field.required}
-          />
-        )
-
-      default: // text, url
-        return (
-          <input
-            type={field.type === 'url' ? 'url' : 'text'}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            value={value}
-            onChange={(e) => updateField(e.target.value)}
-            placeholder={field.placeholder}
-            required={field.required}
-          />
+          <div key={field.name}>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {field.label}
+              <RequiredIndicator isRequired={field.required} />
+            </label>
+            <input
+              type={field.type === 'url' ? 'url' : 'text'}
+              value={value}
+              onChange={(e) => updateCustomField(field.name, e.target.value)}
+              placeholder={field.placeholder}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                hasError ? 'border-red-300' : 'border-gray-300'
+              }`}
+            />
+            {hasError && <div className="text-red-600 text-sm mt-1">{hasError}</div>}
+          </div>
         )
     }
   }
 
-  const steps: WizardStep[] = [
+  const steps = [
     // Step 1: Category Selection
     {
       title: "Избери тип бизнес",
       description: "Какъв тип бизнес добавяте?",
       component: (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {categories.map(category => (
-            <button
-              key={category.slug}
-              onClick={() => {
-                setSelectedCategory(category.slug)
-                setSelectedCategoryId(category.id)
-                setBusinessData((prev: any) => ({ ...prev, category: category.name }))
-              }}
-              className={`p-6 border-2 rounded-lg text-center transition-all ${
-                selectedCategory === category.slug
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="text-4xl mb-2">{category.icon}</div>
-              <div className="font-medium">{category.name}</div>
-            </button>
-          ))}
+        <div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {categories.map(category => (
+              <button
+                key={category.slug}
+                onClick={() => {
+                  setSelectedCategory(category.slug)
+                  setSelectedCategoryId(category.id)
+                }}
+                className={`p-6 border-2 rounded-lg text-center transition-all ${
+                  selectedCategory === category.slug
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="text-4xl mb-2">{category.icon}</div>
+                <div className="font-medium">{category.name}</div>
+              </button>
+            ))}
+          </div>
+          {validationErrors.category && (
+            <div className="text-red-600 text-sm mt-4 text-center">{validationErrors.category}</div>
+          )}
         </div>
       )
     },
@@ -389,38 +489,46 @@ export default function SmartBusinessWizard() {
       title: "Основна информация",
       description: "Въведете основните данни за бизнеса",
       component: (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Име на бизнеса *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Име на бизнеса
+              <RequiredIndicator isRequired={true} />
+            </label>
             <input
               type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               value={businessData.name}
-              onChange={(e) => setBusinessData((prev: any) => ({ ...prev, name: e.target.value }))}
-              required
+              onChange={(e) => updateBusinessData({ name: e.target.value })}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                validationErrors.name ? 'border-red-300' : 'border-gray-300'
+              }`}
             />
+            {validationErrors.name && <div className="text-red-600 text-sm mt-1">{validationErrors.name}</div>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Описание</label>
             <textarea
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               value={businessData.description}
-              onChange={(e) => setBusinessData((prev: any) => ({ ...prev, description: e.target.value }))}
+              onChange={(e) => updateBusinessData({ description: e.target.value })}
               placeholder="Кратко описание на бизнеса..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Работно време</label>
-            <textarea
-              rows={2}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Работно време
+              <RequiredIndicator isRequired={true} />
+            </label>
+            <WorkingHoursPicker
               value={businessData.working_hours}
-              onChange={(e) => setBusinessData((prev: any) => ({ ...prev, working_hours: e.target.value }))}
-              placeholder="Пн-Пт: 09:00-17:00&#10;Сб: 09:00-13:00"
+              onChange={(hours) => updateBusinessData({ working_hours: hours })}
             />
+            {validationErrors.working_hours && (
+              <div className="text-red-600 text-sm mt-1">{validationErrors.working_hours}</div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -428,19 +536,40 @@ export default function SmartBusinessWizard() {
               <label className="block text-sm font-medium text-gray-700 mb-2">Адрес</label>
               <input
                 type="text"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={businessData.address}
-                onChange={(e) => setBusinessData((prev: any) => ({ ...prev, address: e.target.value }))}
+                onChange={(e) => updateBusinessData({ address: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
-              <input
-                type="tel"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              <PhoneInput
                 value={businessData.phone}
-                onChange={(e) => setBusinessData((prev: any) => ({ ...prev, phone: e.target.value }))}
+                onChange={(phone) => updateBusinessData({ phone })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input
+                type="email"
+                value={businessData.email}
+                onChange={(e) => updateBusinessData({ email: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Уебсайт</label>
+              <input
+                type="url"
+                value={businessData.website}
+                onChange={(e) => updateBusinessData({ website: e.target.value })}
+                placeholder="https://example.com"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -454,17 +583,7 @@ export default function SmartBusinessWizard() {
       description: `Допълнителни данни за ${selectedCategory ? getTemplateForCategory(selectedCategory).categoryName.toLowerCase() : 'бизнеса'}`,
       component: selectedCategory ? (
         <div className="space-y-6">
-          {getTemplateForCategory(selectedCategory).fields.map(field => (
-            <div key={field.name}>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {field.label} {field.required && '*'}
-              </label>
-              {renderField(field)}
-              {field.description && (
-                <p className="text-sm text-gray-500 mt-1">{field.description}</p>
-              )}
-            </div>
-          ))}
+          {getTemplateForCategory(selectedCategory).fields.map((field: any) => renderCustomField(field))}
         </div>
       ) : <div>Моля, изберете категория първо.</div>
     },
@@ -478,10 +597,12 @@ export default function SmartBusinessWizard() {
           <div className="bg-gray-50 p-4 rounded-lg">
             <h3 className="font-medium text-gray-900 mb-2">Основна информация:</h3>
             <p><strong>Име:</strong> {businessData.name}</p>
-            <p><strong>Категория:</strong> {businessData.category}</p>
+            <p><strong>Категория:</strong> {selectedCategory ? getTemplateForCategory(selectedCategory).categoryName : ''}</p>
             <p><strong>Адрес:</strong> {businessData.address}</p>
             <p><strong>Телефон:</strong> {businessData.phone}</p>
-            <p><strong>Работно време:</strong> {businessData.working_hours}</p>
+            <p><strong>Email:</strong> {businessData.email}</p>
+            <p><strong>Уебсайт:</strong> {businessData.website}</p>
+            <p><strong>Работно време:</strong> {typeof businessData.working_hours === 'object' ? Object.values(businessData.working_hours)[0] : businessData.working_hours}</p>
           </div>
 
           {Object.keys(businessData.custom_fields).length > 0 && (
@@ -489,7 +610,7 @@ export default function SmartBusinessWizard() {
               <h3 className="font-medium text-gray-900 mb-2">Специфична информация:</h3>
               {Object.entries(businessData.custom_fields).map(([key, value]) => (
                 <p key={key}>
-                  <strong>{key}:</strong> {Array.isArray(value) ? value.join(', ') : String(value)}
+                  <strong>{key.replace(/_/g, ' ')}:</strong> {Array.isArray(value) ? value.join(', ') : String(value)}
                 </p>
               ))}
             </div>
@@ -500,7 +621,7 @@ export default function SmartBusinessWizard() {
   ]
 
   const nextStep = () => {
-    if (currentStep < steps.length - 1) {
+    if (validateStep(currentStep) && currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1)
     }
   }
@@ -519,6 +640,11 @@ export default function SmartBusinessWizard() {
 
     setLoading(true)
     try {
+      // Format working hours for database
+      const formattedWorkingHours = typeof businessData.working_hours === 'object' 
+        ? Object.values(businessData.working_hours)[0] 
+        : businessData.working_hours
+
       const { error } = await supabase
         .from('businesses')
         .insert({
@@ -529,7 +655,7 @@ export default function SmartBusinessWizard() {
           phone: businessData.phone || null,
           email: businessData.email || null,
           website: businessData.website || null,
-          working_hours: businessData.working_hours || null,
+          working_hours: formattedWorkingHours || null,
           category_id: selectedCategoryId,
           custom_fields: businessData.custom_fields,
           rating: 0,
@@ -553,9 +679,10 @@ export default function SmartBusinessWizard() {
           phone: '',
           email: '',
           website: '',
-          working_hours: '',
+          working_hours: {},
           custom_fields: {}
         })
+        setValidationErrors({})
       }
     } catch (err) {
       alert('Грешка: ' + err)
@@ -570,7 +697,7 @@ export default function SmartBusinessWizard() {
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">🧙‍♂️ Smart Business Wizard</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">🧙‍♂️ Smart Business Wizard v2.0</h1>
               <p className="text-gray-600">Интелигентно добавяне на бизнес с персонализирани полета</p>
             </div>
             <Link
@@ -644,12 +771,7 @@ export default function SmartBusinessWizard() {
             ) : (
               <button
                 onClick={nextStep}
-                disabled={currentStep === 0 && !selectedCategory}
-                className={`px-6 py-2 rounded-lg ${
-                  (currentStep === 0 && !selectedCategory)
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
               >
                 Напред →
               </button>
