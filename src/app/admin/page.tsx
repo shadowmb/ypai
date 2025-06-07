@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import { supabase, Business, Category } from '@/lib/supabase'
 import Link from 'next/link'
 
-
 export default function AdminPanel() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showCategoryManager, setShowCategoryManager] = useState(false)
+  const [showAddCategoryForm, setShowAddCategoryForm] = useState(false)
   const [editingBusiness, setEditingBusiness] = useState<Business | null>(null)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState({
     totalBusinesses: 0,
@@ -39,6 +41,16 @@ export default function AdminPanel() {
     email: '',
     website: '',
     verified: false
+  })
+
+  const [newCategory, setNewCategory] = useState({
+    name: '',
+    icon: ''
+  })
+
+  const [editCategoryForm, setEditCategoryForm] = useState({
+    name: '',
+    icon: ''
   })
 
   useEffect(() => {
@@ -80,6 +92,7 @@ export default function AdminPanel() {
     setLoading(false)
   }
 
+  // ========== BUSINESS FUNCTIONS ==========
   const addBusiness = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -200,6 +213,99 @@ export default function AdminPanel() {
     }
   }
 
+  // ========== CATEGORY FUNCTIONS ==========
+  const addCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    const { error } = await supabase
+      .from('categories')
+      .insert([newCategory])
+
+    if (error) {
+      alert('Грешка при добавяне на категория: ' + error.message)
+    } else {
+      alert('Категорията е добавена успешно!')
+      setNewCategory({ name: '', icon: '' })
+      setShowAddCategoryForm(false)
+      loadData()
+    }
+
+    setLoading(false)
+  }
+
+  const startEditCategory = (category: Category) => {
+    setEditingCategory(category)
+    setEditCategoryForm({
+      name: category.name,
+      icon: category.icon || ''
+    })
+  }
+
+  const cancelEditCategory = () => {
+    setEditingCategory(null)
+    setEditCategoryForm({ name: '', icon: '' })
+  }
+
+  const updateCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingCategory) return
+    
+    setLoading(true)
+
+    const { error } = await supabase
+      .from('categories')
+      .update(editCategoryForm)
+      .eq('id', editingCategory.id)
+
+    if (error) {
+      alert('Грешка при редакция на категория: ' + error.message)
+    } else {
+      alert('Категорията е редактирана успешно!')
+      cancelEditCategory()
+      loadData()
+    }
+
+    setLoading(false)
+  }
+
+  const deleteCategory = async (categoryId: number, categoryName: string) => {
+    // Проверка дали има бизнеси в тази категория
+    const { data: businessesInCategory } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('category_id', categoryId)
+
+    if (businessesInCategory && businessesInCategory.length > 0) {
+      alert(`Не можете да изтриете категорията "${categoryName}" защото има ${businessesInCategory.length} бизнеса в нея. Първо преместете или изтрийте бизнесите.`)
+      return
+    }
+
+    if (confirm(`Сигурни ли сте, че искате да изтриете категорията "${categoryName}"?`)) {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', categoryId)
+
+      if (error) {
+        alert('Грешка при изтриване на категория: ' + error.message)
+      } else {
+        alert('Категорията е изтрита успешно!')
+        loadData()
+      }
+    }
+  }
+
+  const findDuplicateCategories = () => {
+    const categoryNames = categories.map(c => c.name.toLowerCase())
+    const duplicates = categories.filter((category, index) => 
+      categoryNames.indexOf(category.name.toLowerCase()) !== index
+    )
+    return duplicates
+  }
+
+  const duplicateCategories = findDuplicateCategories()
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -209,6 +315,13 @@ export default function AdminPanel() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">🛠️ YPAI Admin Panel</h1>
               <p className="text-gray-600 mt-2">Управление на бизнеси и категории</p>
+              {duplicateCategories.length > 0 && (
+                <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded-lg">
+                  <p className="text-red-800 text-sm">
+                    ⚠️ Намерени дублирани категории: {duplicateCategories.map(c => c.name).join(', ')}
+                  </p>
+                </div>
+              )}
             </div>
             <Link
                 href="/"
@@ -253,6 +366,9 @@ export default function AdminPanel() {
               <div className="ml-4">
                 <h3 className="text-lg font-semibold text-gray-900">Категории</h3>
                 <p className="text-3xl font-bold text-purple-600">{stats.totalCategories}</p>
+                {duplicateCategories.length > 0 && (
+                  <p className="text-sm text-red-600">({duplicateCategories.length} дублирани)</p>
+                )}
               </div>
             </div>
           </div>
@@ -266,6 +382,13 @@ export default function AdminPanel() {
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
             >
               {showAddForm ? '✕ Затвори' : '+ Добави нов бизнес'}
+            </button>
+
+            <button
+              onClick={() => setShowCategoryManager(!showCategoryManager)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
+            >
+              {showCategoryManager ? '✕ Затвори' : '📂 Управление на категории'}
             </button>
 
             <Link
@@ -291,6 +414,121 @@ export default function AdminPanel() {
             </Link>
           </div>
         </div> 
+
+        {/* Category Manager */}
+        {showCategoryManager && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">📂 Управление на категории</h2>
+              <button
+                onClick={() => setShowAddCategoryForm(!showAddCategoryForm)}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+              >
+                {showAddCategoryForm ? '✕ Затвори' : '+ Добави категория'}
+              </button>
+            </div>
+
+            {/* Add/Edit Category Form */}
+            {(showAddCategoryForm || editingCategory) && (
+              <div className="border border-gray-200 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-medium mb-4">
+                  {editingCategory ? '✏️ Редактиране на категория' : '➕ Добавяне на нова категория'}
+                </h3>
+                <form onSubmit={editingCategory ? updateCategory : addCategory} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Име на категорията *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      value={editingCategory ? editCategoryForm.name : newCategory.name}
+                      onChange={(e) => editingCategory 
+                        ? setEditCategoryForm({ ...editCategoryForm, name: e.target.value })
+                        : setNewCategory({ ...newCategory, name: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Икона (емоджи)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="🏢"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      value={editingCategory ? editCategoryForm.icon : newCategory.icon}
+                      onChange={(e) => editingCategory 
+                        ? setEditCategoryForm({ ...editCategoryForm, icon: e.target.value })
+                        : setNewCategory({ ...newCategory, icon: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-end gap-2">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg transition-colors"
+                    >
+                      {loading ? 'Обработване...' : (editingCategory ? 'Запази' : 'Добави')}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={editingCategory ? cancelEditCategory : () => setShowAddCategoryForm(false)}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors"
+                    >
+                      Отказ
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* Categories List */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {categories.map((category) => {
+                const businessCount = businesses.filter(b => b.category_id === category.id).length
+                const isDuplicate = duplicateCategories.some(d => d.id === category.id)
+                
+                return (
+                  <div key={category.id} className={`border rounded-lg p-4 ${isDuplicate ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-2xl">{category.icon}</span>
+                          <span className="font-medium">{category.name}</span>
+                          {isDuplicate && <span className="text-red-500">⚠️</span>}
+                        </div>
+                        <p className="text-sm text-gray-500">{businessCount} бизнеса</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 text-sm">
+                      <button
+                        onClick={() => startEditCategory(category)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        ✏️ Редактирай
+                      </button>
+                      <button
+                        onClick={() => deleteCategory(category.id, category.name)}
+                        className="text-red-600 hover:text-red-800"
+                        disabled={businessCount > 0}
+                        title={businessCount > 0 ? 'Не може да се изтрие - има бизнеси в категорията' : ''}
+                      >
+                        🗑️ Изтрий
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Add/Edit Business Form */}
         {(showAddForm || editingBusiness) && (
@@ -473,7 +711,6 @@ export default function AdminPanel() {
             </form>
           </div>
         )}
-        </div>
 
         {/* Business List */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -565,5 +802,6 @@ export default function AdminPanel() {
           )}
         </div>
       </div>
+    </div>
   )
 }

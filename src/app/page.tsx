@@ -1,7 +1,8 @@
-// src/app/page.tsx - Поправена версия с AI Search
+// src/app/page.tsx - Поправена версия с AI Search и Admin бутон
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js';
 import BusinessCard from '@/components/BusinessCard';
 import AISearchBox from '@/components/AISearchBox';
@@ -135,6 +136,33 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Top Navigation Bar with Admin Button */}
+      <nav className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo/Brand */}
+            <div className="flex items-center">
+              <span className="text-xl font-bold text-gray-900">YPAI</span>
+              <span className="ml-2 text-sm text-gray-500">Burgas Directory</span>
+            </div>
+            
+            {/* Admin Button */}
+            <div className="flex items-center space-x-4">
+              <Link 
+                href="/admin" 
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.50a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.50 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.50a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span>Админ</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
