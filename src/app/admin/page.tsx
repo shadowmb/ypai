@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase, Business, Category } from '@/lib/supabase'
 import Link from 'next/link'
+import AddressAutocomplete, { AddressData } from '@/components/AddressAutocomplete'
 
 export default function AdminPanel() {
   const [businesses, setBusinesses] = useState<Business[]>([])
@@ -13,6 +14,20 @@ export default function AdminPanel() {
   const [editingBusiness, setEditingBusiness] = useState<Business | null>(null)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [loading, setLoading] = useState(false)
+  
+  // Нови states за изтриване на категории
+  const [showDeleteCategoryModal, setShowDeleteCategoryModal] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null)
+  const [businessesToMove, setBusinessesToMove] = useState<Business[]>([])
+  const [selectedTargetCategory, setSelectedTargetCategory] = useState('')
+
+  // НОВИ STATES ЗА ТЪРСЕНЕ, СОРТИРАНЕ И ПАГИНАЦИЯ
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState<'name' | 'category' | 'status' | 'created_at'>('created_at')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [itemsPerPage, setItemsPerPage] = useState(20)
+  const [currentPage, setCurrentPage] = useState(1)
+
   const [stats, setStats] = useState({
     totalBusinesses: 0,
     verifiedBusinesses: 0,
@@ -28,7 +43,9 @@ export default function AdminPanel() {
     phone: '',
     email: '',
     website: '',
-    verified: false
+    verified: false,
+    latitude: null as number | null,
+    longitude: null as number | null
   })
 
   const [editForm, setEditForm] = useState({
@@ -40,7 +57,9 @@ export default function AdminPanel() {
     phone: '',
     email: '',
     website: '',
-    verified: false
+    verified: false,
+    latitude: null as number | null,
+    longitude: null as number | null
   })
 
   const [newCategory, setNewCategory] = useState({
@@ -56,6 +75,80 @@ export default function AdminPanel() {
   useEffect(() => {
     loadData()
   }, [])
+
+  // ФУНКЦИИ ЗА ФИЛТРИРАНЕ И СОРТИРАНЕ
+  const filteredAndSortedBusinesses = useMemo(() => {
+    let filtered = businesses
+
+    // Търсене
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase()
+      filtered = businesses.filter(business => 
+        business.name.toLowerCase().includes(search) ||
+        business.address?.toLowerCase().includes(search) ||
+        business.city?.toLowerCase().includes(search) ||
+        business.phone?.toLowerCase().includes(search) ||
+        business.email?.toLowerCase().includes(search) ||
+        business.categories?.name.toLowerCase().includes(search)
+      )
+    }
+
+    // Сортиране
+    filtered.sort((a, b) => {
+      let valueA: string | number | boolean
+      let valueB: string | number | boolean
+
+      switch (sortBy) {
+        case 'name':
+          valueA = a.name.toLowerCase()
+          valueB = b.name.toLowerCase()
+          break
+        case 'category':
+          valueA = a.categories?.name.toLowerCase() || ''
+          valueB = b.categories?.name.toLowerCase() || ''
+          break
+        case 'status':
+          valueA = a.verified
+          valueB = b.verified
+          break
+        case 'created_at':
+        default:
+          valueA = new Date(a.created_at || '').getTime()
+          valueB = new Date(b.created_at || '').getTime()
+          break
+      }
+
+      if (valueA < valueB) return sortOrder === 'asc' ? -1 : 1
+      if (valueA > valueB) return sortOrder === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return filtered
+  }, [businesses, searchTerm, sortBy, sortOrder])
+
+  // Пагинация
+  const totalPages = Math.ceil(filteredAndSortedBusinesses.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedBusinesses = filteredAndSortedBusinesses.slice(startIndex, startIndex + itemsPerPage)
+
+  // Reset страницата при промяна на търсенето или items per page
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, itemsPerPage])
+
+  const handleSort = (column: typeof sortBy) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(column)
+      setSortOrder('asc')
+    }
+  }
+
+  const getSortIcon = (column: typeof sortBy) => {
+    if (sortBy !== column) return '↕️'
+    return sortOrder === 'asc' ? '↑' : '↓'
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -96,16 +189,16 @@ export default function AdminPanel() {
   const addBusiness = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
+  
     const { error } = await supabase
       .from('businesses')
       .insert([{
         ...newBusiness,
         category_id: parseInt(newBusiness.category_id),
         rating: 0,
-        review_count: 0
+        review_count: 0,
       }])
-
+  
     if (error) {
       alert('Грешка при добавяне: ' + error.message)
     } else {
@@ -119,12 +212,14 @@ export default function AdminPanel() {
         phone: '',
         email: '',
         website: '',
-        verified: false
+        verified: false,
+        latitude: null,
+        longitude: null
       })
       setShowAddForm(false)
       loadData()
     }
-
+  
     setLoading(false)
   }
 
@@ -139,7 +234,9 @@ export default function AdminPanel() {
       phone: business.phone || '',
       email: business.email || '',
       website: business.website || '',
-      verified: business.verified
+      verified: business.verified,
+      latitude: business.latitude || null,
+      longitude: business.longitude || null
     })
   }
 
@@ -154,7 +251,9 @@ export default function AdminPanel() {
       phone: '',
       email: '',
       website: '',
-      verified: false
+      verified: false,
+      latitude: null,
+      longitude: null
     })
   }
 
@@ -213,14 +312,48 @@ export default function AdminPanel() {
     }
   }
 
+  const handleAddressSelect = (addressData: AddressData, isEditing: boolean = false) => {
+    if (isEditing) {
+      setEditForm(prev => ({
+        ...prev,
+        address: addressData.street,
+        city: addressData.city,
+        latitude: addressData.latitude,
+        longitude: addressData.longitude
+      }))
+    } else {
+      setNewBusiness(prev => ({
+        ...prev,
+        address: addressData.street,
+        city: addressData.city,
+        latitude: addressData.latitude,
+        longitude: addressData.longitude
+      }))
+    }
+  }
+
   // ========== CATEGORY FUNCTIONS ==========
+  const generateSlug = (name: string): string => {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  }
+
   const addCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
+    const slug = generateSlug(newCategory.name)
+    
     const { error } = await supabase
       .from('categories')
-      .insert([newCategory])
+      .insert([{
+        ...newCategory,
+        slug: slug
+      }])
 
     if (error) {
       alert('Грешка при добавяне на категория: ' + error.message)
@@ -253,9 +386,14 @@ export default function AdminPanel() {
     
     setLoading(true)
 
+    const slug = generateSlug(editCategoryForm.name)
+
     const { error } = await supabase
       .from('categories')
-      .update(editCategoryForm)
+      .update({
+        ...editCategoryForm,
+        slug: slug
+      })
       .eq('id', editingCategory.id)
 
     if (error) {
@@ -269,45 +407,427 @@ export default function AdminPanel() {
     setLoading(false)
   }
 
-  const deleteCategory = async (categoryId: number, categoryName: string) => {
-    // Проверка дали има бизнеси в тази категория
-    const { data: businessesInCategory } = await supabase
-      .from('businesses')
-      .select('id')
-      .eq('category_id', categoryId)
+  const initiateCategoryDelete = async (category: Category) => {
+    const businessesInCategory = businesses.filter(b => b.category_id === category.id)
 
-    if (businessesInCategory && businessesInCategory.length > 0) {
-      alert(`Не можете да изтриете категорията "${categoryName}" защото има ${businessesInCategory.length} бизнеса в нея. Първо преместете или изтрийте бизнесите.`)
-      return
-    }
-
-    if (confirm(`Сигурни ли сте, че искате да изтриете категорията "${categoryName}"?`)) {
-      const { error } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', categoryId)
-
-      if (error) {
-        alert('Грешка при изтриване на категория: ' + error.message)
-      } else {
-        alert('Категорията е изтрита успешно!')
-        loadData()
+    if (businessesInCategory.length === 0) {
+      if (confirm(`Сигурни ли сте, че искате да изтриете категорията "${category.name}"?`)) {
+        await deleteCategoryDirectly(category.id, category.name)
       }
+    } else {
+      setCategoryToDelete(category)
+      setBusinessesToMove(businessesInCategory)
+      setSelectedTargetCategory('')
+      setShowDeleteCategoryModal(true)
     }
   }
 
-  const findDuplicateCategories = () => {
-    const categoryNames = categories.map(c => c.name.toLowerCase())
-    const duplicates = categories.filter((category, index) => 
-      categoryNames.indexOf(category.name.toLowerCase()) !== index
+  const deleteCategoryDirectly = async (categoryId: number, categoryName: string) => {
+    setLoading(true)
+    
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', categoryId)
+
+    if (error) {
+      alert('Грешка при изтриване на категория: ' + error.message)
+    } else {
+      alert('Категорията е изтрита успешно!')
+      loadData()
+    }
+    
+    setLoading(false)
+  }
+
+  const confirmCategoryDelete = async () => {
+    if (!categoryToDelete || !selectedTargetCategory) return
+    
+    setLoading(true)
+    
+    try {
+      const { error: moveError } = await supabase
+        .from('businesses')
+        .update({ category_id: parseInt(selectedTargetCategory) })
+        .eq('category_id', categoryToDelete.id)
+
+      if (moveError) {
+        throw moveError
+      }
+
+      const { error: deleteError } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', categoryToDelete.id)
+
+      if (deleteError) {
+        throw deleteError
+      }
+
+      alert(`Категорията "${categoryToDelete.name}" е изтрита успешно! ${businessesToMove.length} бизнеса са преместени.`)
+      
+      setShowDeleteCategoryModal(false)
+      setCategoryToDelete(null)
+      setBusinessesToMove([])
+      setSelectedTargetCategory('')
+      loadData()
+      
+    } catch (error: any) {
+      alert('Грешка при изтриване на категория: ' + error.message)
+    }
+    
+    setLoading(false)
+  }
+
+  const cancelCategoryDelete = () => {
+    setShowDeleteCategoryModal(false)
+    setCategoryToDelete(null)
+    setBusinessesToMove([])
+    setSelectedTargetCategory('')
+  }
+
+  const availableIcons = [
+    '🏢', '🍽️', '🚗', '🏥', '👨‍⚕️', '🛍️', '🎓', '🔧', 
+    '✂️', '🏨', '💻', '📱', '🎵', '🎬', '🎨', '📚',
+    '🏋️', '⚽', '🎾', '🏊', '🚴', '🧘', '💄', '💅',
+    '🍕', '🍔', '🍜', '☕', '🍺', '🍷', '🛒', '👕',
+    '👠', '💍', '🏠', '🚪', '🔑', '🛠️', '⚡', '💡',
+    '🌱', '🌳', '🌺', '🐕', '🐱', '🚕', '🚌', '✈️'
+  ]
+
+  const IconSelector = ({ value, onChange, placeholder = "Избери икона" }: {
+    value: string
+    onChange: (icon: string) => void
+    placeholder?: string
+  }) => {
+    const [showPicker, setShowPicker] = useState(false)
+
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setShowPicker(!showPicker)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-left flex items-center justify-between bg-white"
+        >
+          <span>
+            {value ? (
+              <span className="flex items-center">
+                <span className="text-2xl mr-2">{value}</span>
+                <span>Избрана икона</span>
+              </span>
+            ) : (
+              <span className="text-gray-500">{placeholder}</span>
+            )}
+          </span>
+          <span className="text-gray-400">▼</span>
+        </button>
+
+        {showPicker && (
+          <>
+            <div 
+              className="fixed inset-0 z-10" 
+              onClick={() => setShowPicker(false)}
+            />
+            
+            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <div className="grid grid-cols-8 gap-1 p-2">
+                {availableIcons.map((icon) => (
+                  <button
+                    key={icon}
+                    type="button"
+                    onClick={() => {
+                      onChange(icon)
+                      setShowPicker(false)
+                    }}
+                    className="p-2 text-2xl hover:bg-gray-100 rounded transition-colors"
+                    title={icon}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
+              
+              <div className="border-t p-2">
+                <input
+                  type="text"
+                  placeholder="Или въведете custom емоджи..."
+                  className="w-full px-2 py-1 text-sm border border-gray-200 rounded"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      onChange(e.target.value)
+                      setShowPicker(false)
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     )
+  }
+  
+  const findDuplicateCategories = () => {
+    const seen = new Set()
+    const duplicates: Category[] = []
+    
+    categories.forEach(category => {
+      const normalizedName = category.name.toLowerCase().trim()
+      if (seen.has(normalizedName)) {
+        const original = categories.find(c => c.name.toLowerCase().trim() === normalizedName && !duplicates.includes(c))
+        if (original && !duplicates.includes(original)) {
+          duplicates.push(original)
+        }
+        duplicates.push(category)
+      } else {
+        seen.add(normalizedName)
+      }
+    })
+    
     return duplicates
   }
 
   const duplicateCategories = findDuplicateCategories()
 
+  // SEARCH & CONTROLS КОМПОНЕНТ
+  const SearchAndControls = () => (
+    <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end">
+        {/* Търсачка */}
+        <div className="flex-1 min-w-0">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            🔍 Търсене в бизнеси
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Търси по име, адрес, телефон, email или категория..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+              🔍
+            </div>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Сортиране */}
+        <div className="w-full lg:w-48">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            📊 Сортиране
+          </label>
+          <select
+            value={`${sortBy}-${sortOrder}`}
+            onChange={(e) => {
+              const [newSortBy, newSortOrder] = e.target.value.split('-') as [typeof sortBy, typeof sortOrder]
+              setSortBy(newSortBy)
+              setSortOrder(newSortOrder)
+            }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          >
+            <option value="created_at-desc">📅 Най-нови първо</option>
+            <option value="created_at-asc">📅 Най-стари първо</option>
+            <option value="name-asc">🔤 Име А-Я</option>
+            <option value="name-desc">🔤 Име Я-А</option>
+            <option value="category-asc">📂 Категория А-Я</option>
+            <option value="category-desc">📂 Категория Я-А</option>
+            <option value="status-desc">✅ Верифицирани първо</option>
+            <option value="status-asc">⏳ Неверифицирани първо</option>
+          </select>
+        </div>
+
+        {/* Items per page */}
+        <div className="w-full lg:w-32">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            📄 На страница
+          </label>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => setItemsPerPage(Number(e.target.value))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={filteredAndSortedBusinesses.length}>Всички ({filteredAndSortedBusinesses.length})</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Резултати информация */}
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600">
+        <div>
+          Показване {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredAndSortedBusinesses.length)} от {filteredAndSortedBusinesses.length} 
+          {searchTerm && ` (филтрирани от общо ${businesses.length})`}
+        </div>
+        {searchTerm && (
+          <div className="mt-2 sm:mt-0">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              Търсене: "{searchTerm}"
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  // PAGINATION КОМПОНЕНТ
+  const Pagination = () => {
+    if (totalPages <= 1) return null
+
+    const getPageNumbers = () => {
+      const pages = []
+      const showPages = 5
+      
+      let startPage = Math.max(1, currentPage - Math.floor(showPages / 2))
+      let endPage = Math.min(totalPages, startPage + showPages - 1)
+      
+      if (endPage - startPage + 1 < showPages) {
+        startPage = Math.max(1, endPage - showPages + 1)
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i)
+      }
+      
+      return pages
+    }
+
+    return (
+      <div className="bg-white rounded-xl shadow-lg p-6 mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-gray-700 mb-4 sm:mb-0">
+            Страница {currentPage} от {totalPages}
+          </div>
+          
+          <nav className="flex items-center space-x-1">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ⏮️
+            </button>
+            
+            <button
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border-t border-b border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ⬅️
+            </button>
+
+            {getPageNumbers().map((pageNumber) => (
+              <button
+                key={pageNumber}
+                onClick={() => setCurrentPage(pageNumber)}
+                className={`px-3 py-2 text-sm font-medium border-t border-b border-gray-300 ${
+                  currentPage === pageNumber
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'text-gray-500 bg-white hover:bg-gray-50'
+                }`}
+              >
+                {pageNumber}
+              </button>
+            ))}
+
+            <button
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border-t border-b border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ➡️
+            </button>
+            
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ⏭️
+            </button>
+          </nav>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Modal за изтриване на категория */}
+      {showDeleteCategoryModal && categoryToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              ⚠️ Премести бизнесите преди изтриване
+            </h3>
+            
+            <p className="text-gray-600 mb-4">
+              Категорията <strong>"{categoryToDelete.name}"</strong> съдържа {businessesToMove.length} бизнеса. 
+              Моля изберете нова категория за тях:
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Нова категория за бизнесите:
+              </label>
+              <select
+                value={selectedTargetCategory}
+                onChange={(e) => setSelectedTargetCategory(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="">-- Избери категория --</option>
+                {categories
+                  .filter(c => c.id !== categoryToDelete.id)
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.icon} {category.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="space-y-2 mb-4 max-h-32 overflow-y-auto">
+              <p className="text-sm text-gray-600">Бизнеси за преместване:</p>
+              {businessesToMove.map(business => (
+                <div key={business.id} className="text-sm bg-gray-100 px-2 py-1 rounded">
+                  {business.name}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={confirmCategoryDelete}
+                disabled={!selectedTargetCategory || loading}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                {loading ? 'Изтриване...' : 'Премести и изтрий'}
+              </button>
+              
+              <button
+                onClick={cancelCategoryDelete}
+                disabled={loading}
+                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Отказ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -455,15 +975,13 @@ export default function AdminPanel() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Икона (емоджи)
                     </label>
-                    <input
-                      type="text"
-                      placeholder="🏢"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    <IconSelector
                       value={editingCategory ? editCategoryForm.icon : newCategory.icon}
-                      onChange={(e) => editingCategory 
-                        ? setEditCategoryForm({ ...editCategoryForm, icon: e.target.value })
-                        : setNewCategory({ ...newCategory, icon: e.target.value })
+                      onChange={(icon) => editingCategory 
+                        ? setEditCategoryForm({ ...editCategoryForm, icon })
+                        : setNewCategory({ ...newCategory, icon })
                       }
+                      placeholder="Избери икона за категорията"
                     />
                   </div>
 
@@ -515,12 +1033,10 @@ export default function AdminPanel() {
                         ✏️ Редактирай
                       </button>
                       <button
-                        onClick={() => deleteCategory(category.id, category.name)}
+                        onClick={() => initiateCategoryDelete(category)}
                         className="text-red-600 hover:text-red-800"
-                        disabled={businessCount > 0}
-                        title={businessCount > 0 ? 'Не може да се изтрие - има бизнеси в категорията' : ''}
                       >
-                        🗑️ Изтрий
+                        🗑️ Изтрий {businessCount > 0 && `(${businessCount})`}
                       </button>
                     </div>
                   </div>
@@ -599,34 +1115,32 @@ export default function AdminPanel() {
                 />
               </div>
 
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Адрес
+                  📍 Адрес *
                 </label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  value={editingBusiness ? editForm.address : newBusiness.address}
-                  onChange={(e) => editingBusiness 
-                    ? setEditForm({ ...editForm, address: e.target.value })
-                    : setNewBusiness({ ...newBusiness, address: e.target.value })
-                  }
+                <AddressAutocomplete
+                  onAddressSelect={(addressData) => handleAddressSelect(addressData, !!editingBusiness)}
+                  defaultValue={editingBusiness ? `${editForm.address}, ${editForm.city}` : `${newBusiness.address}, ${newBusiness.city}`}
+                  placeholder="Въведете адрес (напр. бул. Витоша 1, София)"
+                  className="w-full"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Град
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  value={editingBusiness ? editForm.city : newBusiness.city}
-                  onChange={(e) => editingBusiness 
-                    ? setEditForm({ ...editForm, city: e.target.value })
-                    : setNewBusiness({ ...newBusiness, city: e.target.value })
-                  }
-                />
+                
+                {/* GPS координати индикатор */}
+                {((editingBusiness && editForm.latitude) || (!editingBusiness && newBusiness.latitude)) && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-700 flex items-center">
+                      <span className="mr-2">✅</span>
+                      GPS координати записани: {' '}
+                      <span className="font-mono text-xs ml-1">
+                        {editingBusiness 
+                          ? `${editForm.latitude?.toFixed(6)}, ${editForm.longitude?.toFixed(6)}`
+                          : `${newBusiness.latitude?.toFixed(6)}, ${newBusiness.longitude?.toFixed(6)}`
+                        }
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -712,10 +1226,16 @@ export default function AdminPanel() {
           </div>
         )}
 
+        {/* Search & Controls */}
+        <SearchAndControls />
+
         {/* Business List */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Списък с бизнеси</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              Списък с бизнеси
+              {searchTerm && <span className="text-blue-600 ml-2">({filteredAndSortedBusinesses.length} резултата)</span>}
+            </h2>
           </div>
 
           {loading ? (
@@ -728,17 +1248,35 @@ export default function AdminPanel() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Бизнес
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('name')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Бизнес</span>
+                        <span className="text-sm">{getSortIcon('name')}</span>
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Категория
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('category')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Категория</span>
+                        <span className="text-sm">{getSortIcon('category')}</span>
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Контакт
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Статус
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Статус</span>
+                        <span className="text-sm">{getSortIcon('status')}</span>
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Действия
@@ -746,12 +1284,17 @@ export default function AdminPanel() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {businesses.map((business) => (
+                  {paginatedBusinesses.map((business) => (
                     <tr key={business.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{business.name}</div>
-                          <div className="text-sm text-gray-500">{business.address}, {business.city}</div>
+                          <div className="text-sm text-gray-500 flex items-center">
+                            {business.address}, {business.city}
+                            {business.latitude && business.longitude && (
+                              <span className="ml-2 text-green-500" title="GPS координати налични">📍</span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -801,6 +1344,9 @@ export default function AdminPanel() {
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        <Pagination />
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
-// src/app/page.tsx - Поправена версия с AI Search и Admin бутон
+// src/app/page.tsx - Enhanced версия с Search, Sort & Pagination
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js';
 import BusinessCard from '@/components/BusinessCard';
@@ -21,11 +21,74 @@ export default function HomePage() {
   const [searchMode, setSearchMode] = useState<'ai' | 'traditional'>('ai');
   const [traditionalQuery, setTraditionalQuery] = useState('');
 
+  // НОВИ STATES ЗА ПОДОБРЕНИЯ
+  const [sortBy, setSortBy] = useState<'name' | 'rating' | 'verified' | 'created_at'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [itemsPerPage, setItemsPerPage] = useState(12);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+
   // Зареди категории при първо зареждане
   useEffect(() => {
     loadCategories();
     loadBusinesses();
   }, []);
+
+  // ФУНКЦИИ ЗА ФИЛТРИРАНЕ И СОРТИРАНЕ
+  const filteredAndSortedBusinesses = useMemo(() => {
+    let filtered = [...businesses];
+
+    // Филтриране по статус
+    if (statusFilter === 'verified') {
+      filtered = filtered.filter(b => b.verified);
+    } else if (statusFilter === 'unverified') {
+      filtered = filtered.filter(b => !b.verified);
+    }
+
+    // Сортиране
+    filtered.sort((a, b) => {
+      let valueA: string | number | boolean;
+      let valueB: string | number | boolean;
+
+      switch (sortBy) {
+        case 'name':
+          valueA = a.name.toLowerCase();
+          valueB = b.name.toLowerCase();
+          break;
+        case 'rating':
+          valueA = a.rating || 0;
+          valueB = b.rating || 0;
+          break;
+        case 'verified':
+          valueA = a.verified;
+          valueB = b.verified;
+          break;
+        case 'created_at':
+        default:
+          valueA = new Date(a.created_at || '').getTime();
+          valueB = new Date(b.created_at || '').getTime();
+          break;
+      }
+
+      if (valueA < valueB) return sortOrder === 'asc' ? -1 : 1;
+      if (valueA > valueB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [businesses, sortBy, sortOrder, statusFilter]);
+
+  // Пагинация
+  const totalPages = Math.ceil(filteredAndSortedBusinesses.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedBusinesses = filteredAndSortedBusinesses.slice(startIndex, startIndex + itemsPerPage);
+
+  // Reset страницата при промяна на филтрите
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, statusFilter, sortBy, itemsPerPage]);
 
   const loadCategories = async () => {
     try {
@@ -69,7 +132,7 @@ export default function HomePage() {
   const handleCategoryFilter = (categoryId: number | null) => {
     setSelectedCategory(categoryId);
     loadBusinesses(categoryId || undefined);
-    setSearchMode('traditional'); // Превключи към традиционно търсене при филтриране
+    setSearchMode('traditional');
   };
 
   const handleTraditionalSearch = async () => {
@@ -103,9 +166,7 @@ export default function HomePage() {
     }
   };
 
-  // Поправена функция за AI Search резултати
   const handleAISearchResults = (results: AISearchResult[]) => {
-    // Конвертирай AISearchResult към Business формат
     const convertedBusinesses: Business[] = results.map((result) => ({
       id: result.id,
       name: result.name,
@@ -126,12 +187,107 @@ export default function HomePage() {
       review_count: result.review_count,
       working_hours: result.working_hours || '',
       custom_fields: result.custom_fields || {},
-      created_at: new Date().toISOString(), // Винаги задава стойност
-      updated_at: new Date().toISOString()  // Винаги задава стойност
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }));
 
     setBusinesses(convertedBusinesses);
     setLoading(false);
+  };
+
+  const handleSort = (newSortBy: typeof sortBy) => {
+    if (sortBy === newSortBy) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(newSortBy);
+      setSortOrder('desc'); // Default to desc for new sort
+    }
+  };
+
+  const getSortIcon = (column: typeof sortBy) => {
+    if (sortBy !== column) return '↕️';
+    return sortOrder === 'asc' ? '↑' : '↓';
+  };
+
+  // PAGINATION КОМПОНЕНТ
+  const Pagination = () => {
+    if (totalPages <= 1) return null;
+
+    const getPageNumbers = () => {
+      const pages = [];
+      const showPages = 5;
+      
+      let startPage = Math.max(1, currentPage - Math.floor(showPages / 2));
+      let endPage = Math.min(totalPages, startPage + showPages - 1);
+      
+      if (endPage - startPage + 1 < showPages) {
+        startPage = Math.max(1, endPage - showPages + 1);
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+      }
+      
+      return pages;
+    };
+
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6 mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-gray-700 mb-4 sm:mb-0">
+            Показване {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredAndSortedBusinesses.length)} от {filteredAndSortedBusinesses.length} резултата
+          </div>
+          
+          <nav className="flex items-center space-x-1">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ⏮️
+            </button>
+            
+            <button
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border-t border-b border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ⬅️
+            </button>
+
+            {getPageNumbers().map((pageNumber) => (
+              <button
+                key={pageNumber}
+                onClick={() => setCurrentPage(pageNumber)}
+                className={`px-3 py-2 text-sm font-medium border-t border-b border-gray-300 ${
+                  currentPage === pageNumber
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'text-gray-500 bg-white hover:bg-gray-50'
+                }`}
+              >
+                {pageNumber}
+              </button>
+            ))}
+
+            <button
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border-t border-b border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ➡️
+            </button>
+            
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ⏭️
+            </button>
+          </nav>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -140,13 +296,11 @@ export default function HomePage() {
       <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo/Brand */}
             <div className="flex items-center">
               <span className="text-xl font-bold text-gray-900">YPAI</span>
               <span className="ml-2 text-sm text-gray-500">Burgas Directory</span>
             </div>
             
-            {/* Admin Button */}
             <div className="flex items-center space-x-4">
               <Link 
                 href="/admin" 
@@ -241,29 +395,156 @@ export default function HomePage() {
                 : 'bg-white text-gray-700 hover:bg-gray-100'
             }`}
           >
-            🏢 Всички
+            🏢 Всички ({businesses.length})
           </button>
           
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => handleCategoryFilter(category.id)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                selectedCategory === category.id
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {category.icon} {category.name}
-            </button>
-          ))}
+          {categories.map((category) => {
+            const count = businesses.filter(b => b.category_id === category.id).length;
+            return (
+              <button
+                key={category.id}
+                onClick={() => handleCategoryFilter(category.id)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  selectedCategory === category.id
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {category.icon} {category.name} ({count})
+              </button>
+            );
+          })}
         </div>
 
-        {/* Results */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">
-            {loading ? 'Зареждане...' : `Намерени ${businesses.length} бизнеса`}
-          </h2>
+        {/* НОВИ CONTROLS - Сортиране, Филтриране, View Mode */}
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Left side - Sort & Filter */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              {/* Sort */}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-gray-700">📊 Сортиране:</span>
+                <select
+                  value={`${sortBy}-${sortOrder}`}
+                  onChange={(e) => {
+                    const [newSortBy, newSortOrder] = e.target.value.split('-') as [typeof sortBy, typeof sortOrder];
+                    setSortBy(newSortBy);
+                    setSortOrder(newSortOrder);
+                  }}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="created_at-desc">📅 Най-нови първо</option>
+                  <option value="created_at-asc">📅 Най-стари първо</option>
+                  <option value="name-asc">🔤 Име А-Я</option>
+                  <option value="name-desc">🔤 Име Я-А</option>
+                  <option value="rating-desc">⭐ Най-високо оценени</option>
+                  <option value="rating-asc">⭐ Най-ниско оценени</option>
+                  <option value="verified-desc">✅ Верифицирани първо</option>
+                  <option value="verified-asc">⏳ Неверифицирани първо</option>
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-gray-700">🏷️ Статус:</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Всички</option>
+                  <option value="verified">✅ Само верифицирани</option>
+                  <option value="unverified">⏳ Неверифицирани</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Right side - View & Pagination controls */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              {/* Items per page */}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-gray-700">📄 На страница:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value={6}>6</option>
+                  <option value={12}>12</option>
+                  <option value={24}>24</option>
+                  <option value={48}>48</option>
+                  <option value={filteredAndSortedBusinesses.length}>Всички ({filteredAndSortedBusinesses.length})</option>
+                </select>
+              </div>
+
+              {/* View Mode Toggle */}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-gray-700">👁️ Изглед:</span>
+                <div className="bg-gray-100 rounded-lg p-1 flex">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      viewMode === 'grid'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    ⊞ Мрежа
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      viewMode === 'list'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    ☰ Списък
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Results Summary */}
+          <div className="mt-4 pt-4 border-t border-gray-200 text-sm text-gray-600">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                Показване {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredAndSortedBusinesses.length)} от {filteredAndSortedBusinesses.length} резултата
+                {(statusFilter !== 'all' || selectedCategory !== null) && (
+                  <span className="ml-2 text-blue-600">
+                    (филтрирани от общо {businesses.length})
+                  </span>
+                )}
+              </div>
+              
+              {/* Active Filters */}
+              <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+                {statusFilter !== 'all' && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {statusFilter === 'verified' ? '✅ Верифицирани' : '⏳ Неверифицирани'}
+                    <button 
+                      onClick={() => setStatusFilter('all')}
+                      className="ml-1.5 text-blue-600 hover:text-blue-800"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+                {selectedCategory !== null && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {categories.find(c => c.id === selectedCategory)?.icon} {categories.find(c => c.id === selectedCategory)?.name}
+                    <button 
+                      onClick={() => handleCategoryFilter(null)}
+                      className="ml-1.5 text-blue-600 hover:text-blue-800"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Loading State */}
@@ -274,23 +555,36 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Business Grid */}
+        {/* Business Grid/List */}
         {!loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {businesses.length === 0 ? (
-              <div className="col-span-full text-center py-12 bg-white rounded-lg">
+          <>
+            {filteredAndSortedBusinesses.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-lg">
                 <div className="text-4xl mb-4">🤷‍♂️</div>
                 <p className="text-gray-600 mb-2">Няма намерени бизнеси</p>
                 <p className="text-sm text-gray-500">
-                  Опитайте с различни ключови думи или категория
+                  Опитайте с различни ключови думи или филтри
                 </p>
               </div>
             ) : (
-              businesses.map((business) => (
-                <BusinessCard key={business.id} business={business as any} />
-              ))
+              <div className={viewMode === 'grid' 
+                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                : "space-y-4"
+              }>
+                {paginatedBusinesses.map((business) => (
+                  <div key={business.id} className={viewMode === 'list' 
+                    ? "bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow"
+                    : ""
+                  }>
+                    <BusinessCard business={business as any} viewMode={viewMode} />
+                  </div>
+                ))}
+              </div>
             )}
-          </div>
+
+            {/* Pagination */}
+            <Pagination />
+          </>
         )}
       </div>
 

@@ -25,6 +25,8 @@ export interface Business {
   created_at: string
   updated_at: string | null
   categories?: Category
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export interface Category {

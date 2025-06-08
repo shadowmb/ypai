@@ -1,10 +1,12 @@
+// app/layout.tsx - Clean Server Component без callbacks
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import GoogleMapsProvider from '@/components/GoogleMapsProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'YPAI - Yellow Pages AI | Bulgarian Business Directory for AI Agents',
   description: 'AI-optimized Bulgarian business directory. RESTful API for intelligent assistants, chatbots, and AI agents. Discover businesses with enhanced search capabilities.',
   keywords: 'Bulgaria businesses, AI directory, business API, Bulgarian companies, AI agents, chatbots, business search, structured data',
@@ -47,7 +49,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="bg">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <GoogleMapsProvider>
+          {children}
+        </GoogleMapsProvider>
+      </body>
     </html>
   )
 }
